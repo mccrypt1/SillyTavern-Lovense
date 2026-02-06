@@ -67,11 +67,25 @@ let streamingText = ''; // Accumulate streaming text
 let isLooping = false; // Flag to control loop execution
 
 /**
+ * Determine the correct protocol for a Lovense connection based on port.
+ * Lovense HTTP API runs on ports in the 20000 range (e.g., 20010).
+ * Lovense HTTPS API runs on ports in the 30000 range (e.g., 30010).
+ */
+function getLovenseProtocol(port) {
+    const portNum = parseInt(port);
+    if (portNum >= 20000 && portNum < 30000) {
+        return 'http';
+    }
+    return 'https';
+}
+
+/**
  * Check connection to Lovense Remote
  */
 async function checkConnection() {
     const settings = extension_settings[MODULE_NAME];
-    const lovenseUrl = `https://${settings.local_ip}:${settings.local_port}/command`;
+    const protocol = getLovenseProtocol(settings.local_port);
+    const lovenseUrl = `${protocol}://${settings.local_ip}:${settings.local_port}/command`;
 
     try {
         // Use SillyTavern's proxy to avoid CORS issues with self-signed certificates
@@ -89,7 +103,11 @@ async function checkConnection() {
         }
 
         const data = await response.json();
+        console.log('[Lovense] Connection check response:', data);
 
+        // Lovense API error codes:
+        // 200 = Success, 401 = Toy Not Found, 402 = Toy Not Connected
+        // 500 = HTTP server not started, 400 = Invalid Command
         if (data.code === 200 && data.data && data.data.toys) {
             const toysData = typeof data.data.toys === 'string' ? JSON.parse(data.data.toys) : data.data.toys;
             connectedToys = toysData;
@@ -99,7 +117,24 @@ async function checkConnection() {
             updateConnectionStatus();
             updatePrompt();
             return true;
+        } else if (data.code === 401) {
+            // 401 = Toy Not Found — app is reachable but no toy is paired
+            console.log('[Lovense] App is reachable but no toy is paired/found');
+            toastr.warning('Lovense app connected, but no toy found. Make sure your toy is paired in the Lovense Remote app.');
+            settings.connected = false;
+            connectedToys = {};
+            updateConnectionStatus();
+            return false;
+        } else if (data.code === 402) {
+            // 402 = Toy Not Connected
+            console.log('[Lovense] Toy found but not connected');
+            toastr.warning('Toy found but not connected. Check the Bluetooth connection in the Lovense Remote app.');
+            settings.connected = false;
+            connectedToys = {};
+            updateConnectionStatus();
+            return false;
         } else {
+            console.log('[Lovense] Unexpected response code:', data.code);
             settings.connected = false;
             connectedToys = {};
             updateConnectionStatus();
@@ -159,7 +194,8 @@ async function sendLovenseCommand(command, trackAsLast = true, silent = false) {
     }
 
     try {
-        const lovenseUrl = `https://${settings.local_ip}:${settings.local_port}/command`;
+        const protocol = getLovenseProtocol(settings.local_port);
+        const lovenseUrl = `${protocol}://${settings.local_ip}:${settings.local_port}/command`;
 
         // Use SillyTavern's proxy to avoid CORS issues
         const response = await fetch('/api/plugins/lovense/command', {
@@ -793,7 +829,14 @@ function updatePrompt() {
  */
 function loadSettings() {
     if (!extension_settings[MODULE_NAME]) {
-        extension_settings[MODULE_NAME] = { ...defaultSettings };
+        extension_settings[MODULE_NAME] = {};
+    }
+
+    // Merge defaults for any missing keys so new settings are always applied
+    for (const [key, value] of Object.entries(defaultSettings)) {
+        if (extension_settings[MODULE_NAME][key] === undefined) {
+            extension_settings[MODULE_NAME][key] = value;
+        }
     }
 
     const settings = extension_settings[MODULE_NAME];
