@@ -48,7 +48,7 @@ const defaultSettings = {
     enabled: false,
     connected: false,
     toys: {},
-    local_ip: '127-0-0-1.lovense.club',
+    local_ip: '127.0.0.1',
     local_port: '30010',
     guidelines: `1. Match intensity to context: gentle (1-10), moderate (11-15), intense (16-20)
 2. Use commands that fit the scene naturally
@@ -65,6 +65,26 @@ let loopInterval = null; // Interval for looping commands
 let currentLoopIndex = 0; // Current position in the loop
 let streamingText = ''; // Accumulate streaming text
 let isLooping = false; // Flag to control loop execution
+
+/**
+ * Format a user-entered IP into a Lovense-compatible hostname.
+ * Lovense uses *.lovense.club domains that DNS-resolve to local IPs,
+ * which is required for their SSL certificates to work.
+ *
+ * Accepts: "127.0.0.1", "192-168-1-44", "192-168-1-44.lovense.club", "localhost"
+ * Returns: "127-0-0-1.lovense.club", "192-168-1-44.lovense.club", etc.
+ */
+function formatLovenseHost(ip) {
+    if (!ip) return '127-0-0-1.lovense.club';
+    let host = ip.trim();
+    // Already fully qualified
+    if (host.endsWith('.lovense.club')) return host;
+    // Convert localhost
+    if (host === 'localhost') host = '127.0.0.1';
+    // Replace dots with dashes (192.168.1.44 → 192-168-1-44)
+    host = host.replace(/\./g, '-');
+    return `${host}.lovense.club`;
+}
 
 /**
  * Determine the correct protocol for a Lovense connection based on port.
@@ -85,7 +105,8 @@ function getLovenseProtocol(port) {
 async function checkConnection() {
     const settings = extension_settings[MODULE_NAME];
     const protocol = getLovenseProtocol(settings.local_port);
-    const lovenseUrl = `${protocol}://${settings.local_ip}:${settings.local_port}/command`;
+    const host = formatLovenseHost(settings.local_ip);
+    const lovenseUrl = `${protocol}://${host}:${settings.local_port}/command`;
 
     try {
         // Use SillyTavern's proxy to avoid CORS issues with self-signed certificates
@@ -195,7 +216,8 @@ async function sendLovenseCommand(command, trackAsLast = true, silent = false) {
 
     try {
         const protocol = getLovenseProtocol(settings.local_port);
-        const lovenseUrl = `${protocol}://${settings.local_ip}:${settings.local_port}/command`;
+        const host = formatLovenseHost(settings.local_ip);
+        const lovenseUrl = `${protocol}://${host}:${settings.local_port}/command`;
 
         // Use SillyTavern's proxy to avoid CORS issues
         const response = await fetch('/api/plugins/lovense/command', {
@@ -841,9 +863,15 @@ function loadSettings() {
 
     const settings = extension_settings[MODULE_NAME];
 
+    // Migrate old format: strip .lovense.club suffix and convert dashes back to dots
+    if (settings.local_ip && settings.local_ip.endsWith('.lovense.club')) {
+        settings.local_ip = settings.local_ip.replace('.lovense.club', '').replace(/-/g, '.');
+        saveSettingsDebounced();
+    }
+
     // Restore settings to UI
     $('#lovense_enabled').prop('checked', settings.enabled);
-    $('#lovense_local_ip').val(settings.local_ip || '127-0-0-1.lovense.club');
+    $('#lovense_local_ip').val(settings.local_ip || '127.0.0.1');
     $('#lovense_local_port').val(settings.local_port || '30010');
     $('#lovense_guidelines').val(settings.guidelines || defaultSettings.guidelines);
 
