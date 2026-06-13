@@ -8,6 +8,8 @@ This extension allows AI characters in SillyTavern to control your Lovense devic
 
 You're welcome.
 
+> **Solace Pro support:** This fork adds **Lovense Solace / Solace Pro** compatibility (thrusting speed + stroke length/depth) on top of the original. The change lives in `index.js` and is also offered upstream as a pull request. Want an extra on-screen manual control panel too? See **[SillyTavern-Lovense-Panel](https://github.com/mccrypt1/SillyTavern-Lovense-Panel)**.
+
 **Oh, and if you're planning on getting a Lovense device just so your AI waifu/husbandu can do the deed with you, consider using my referral link, thanks! By purchasing the toys through it, you support me directly, as I'm now Lovense's official affiliate. Yepee!**
 
 ***Get 55% OFF your Lovense order via my referral link: https://www.lovense.com/a/SpicyMarinara***
